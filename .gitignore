@@ -1,0 +1,6 @@
+__pycache__
+.env
+venv
+analysis_results
+fairy_tale_pictures
+reference_image
