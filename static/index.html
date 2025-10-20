@@ -1,71 +1,26 @@
 <!doctype html>
 <html lang="ko">
 <head>
-  <meta charset="utf-8" />
-  <title>Chat – gpt-5</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <link href="/static/styles.css" rel="stylesheet" />
+  <meta charset="utf-8"/>
+  <title>동화책 삽화 편집</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <link rel="stylesheet" href="/static/styles.css"/>
 </head>
 <body>
-  <header class="topbar">
-    <div class="topbar__center">
-      <div class="model-badge">
-        <span class="dot"></span>
-        gpt-5
+  <main id="app"></main>
+
+  <!-- 이미지 자세히 보기 모달 -->
+  <div id="modal" class="modal hidden">
+    <div class="modal__backdrop"></div>
+    <div class="modal__panel">
+      <button id="modal-close" class="modal__close">×</button>
+      <img id="modal-img" alt="preview"/>
+      <div class="modal__footer">
+        <button id="modal-back" class="btn">돌아가기</button>
+        <a id="modal-download" class="btn primary" download>다운로드</a>
       </div>
     </div>
-  </header>
-
-  <main class="shell">
-    <div id="chat" class="chat">
-      <!-- 초기 안내 (필요 시 숨겨도 됨) -->
-      <div class="msg msg--assistant">
-        <div class="avatar">🤖</div>
-        <div class="bubble">
-          안녕하세요! 이미지를 첨부하고 “이렇게 수정해줘”라고 지시하면, 수정된 이미지로 응답해 드려요. 텍스트만 보내면 일반 대화로 답해요. ✨
-        </div>
-      </div>
-    </div>
-  </main>
-
-  <footer class="composer">
-    <div class="composer__inner">
-      <div id="file-chips" class="chips"></div>
-
-      <div class="input-wrap">
-        <button id="attach-btn" class="icon-btn" title="파일 첨부">
-          <!-- plus icon -->
-          <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-          </svg>
-        </button>
-        <textarea id="user-input" placeholder="메시지를 입력하세요 (Enter: 전송, Shift+Enter: 줄바꿈)"></textarea>
-        <button id="send-btn" class="send-btn" title="보내기">
-          <!-- arrow icon -->
-          <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M5 12h14M13 5l7 7-7 7" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </button>
-      </div>
-
-      <div class="meta">
-        <div class="size-select">
-          <label for="image-size">이미지 크기</label>
-          <select id="image-size">
-            <option value="1536x1024">1536x1024</option>
-            <option value="1024x1024">1024×1024</option>
-            <option value="512x512">512×512</option>
-            <option value="256x256">256×256</option>
-          </select>
-        </div>
-        <div class="hint">이미지는 드래그&드롭 또는 붙여넣기(Ctrl/Cmd+V)도 가능</div>
-      </div>
-    </div>
-
-    <!-- 숨은 파일 입력 -->
-    <input id="image-input" type="file" accept="image/*" multiple hidden />
-    <input id="mask-input" type="file" accept="image/png" hidden />
-  </footer>
+  </div>
 
   <script src="/static/app.js"></script>
 </body>
