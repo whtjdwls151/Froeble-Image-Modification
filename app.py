@@ -175,13 +175,24 @@ def api_create_project():
     name = (data.get("name") or "").strip()
     if not name:
         return jsonify({"ok": False, "error": "프로젝트 이름이 필요합니다."}), 400
+
     slug = slugify(name)
     base = project_path(slug)
-    if os.path.exists(base):
-        # 이름이 겹치면 타임스탬프 부가
-        slug = f"{slug}-{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}"
-        base = project_path(slug)
 
+    # 1) 같은 slug(=이름 충돌) 폴더가 이미 있으면 거부
+    if os.path.isdir(base):
+        return jsonify({"ok": False, "error": "동일한 이름의 프로젝트가 이미 존재합니다."}), 409
+
+    # 2) 메타 이름이 같은 프로젝트가 있는지도(대소문자 무시) 거부
+    for existing in os.listdir(PROJECTS_DIR):
+        pdir = os.path.join(PROJECTS_DIR, existing)
+        if not os.path.isdir(pdir): 
+            continue
+        meta = read_json(os.path.join(pdir, "project.json"), {})
+        if (meta.get("name","").strip().lower() == name.lower()):
+            return jsonify({"ok": False, "error": "동일한 이름의 프로젝트가 이미 존재합니다."}), 409
+
+    # 생성
     ensure_dir(base)
     meta = {
         "name": name,
@@ -193,21 +204,36 @@ def api_create_project():
     ensure_dir(chatlogs_path(slug))
     return jsonify({"ok": True, "slug": slug})
 
+
 @app.route("/api/projects/<slug>/rename", methods=["POST"])
 def api_rename_project(slug):
     data = request.get_json(force=True)
     new_name = (data.get("name") or "").strip()
     if not new_name:
         return jsonify({"ok": False, "error": "이름이 필요합니다."}), 400
+
     base = project_path(slug)
     if not os.path.isdir(base):
         return jsonify({"ok": False, "error": "프로젝트가 없습니다."}), 404
+
+    # 다른 프로젝트와 이름 중복 체크
+    for existing in os.listdir(PROJECTS_DIR):
+        if existing == slug:
+            continue
+        pdir = os.path.join(PROJECTS_DIR, existing)
+        if not os.path.isdir(pdir):
+            continue
+        meta2 = read_json(os.path.join(pdir, "project.json"), {})
+        if meta2.get("name","").strip().lower() == new_name.lower():
+            return jsonify({"ok": False, "error": "동일한 이름의 프로젝트가 이미 존재합니다."}), 409
+
     meta_p = os.path.join(base, "project.json")
     meta = read_json(meta_p, {})
     meta["name"] = new_name
     meta["updated_at"] = now_iso()
     write_json(meta_p, meta)
     return jsonify({"ok": True})
+
 
 @app.route("/api/projects/<slug>", methods=["DELETE"])
 def api_delete_project(slug):

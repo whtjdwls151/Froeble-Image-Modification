@@ -10,7 +10,8 @@ let state = {
   editBaseVersion: null, // "__ORIGINAL__" | "A-2.png" | null
   generating: false,
   detailImage: null,
-  chatCache: {}       // { "<slug>|<label>": [{baseUrl,prompt,outUrl,outFile}] }
+  chatCache: {},       // { "<slug>|<label>": [{baseUrl,prompt,outUrl,outFile}] }
+  chatInitTs: {}
 };
 
 async function jget(url){ const r=await fetch(url); return r.json(); }
@@ -251,39 +252,89 @@ async function refreshChatDataForCurrent(){
   if(ill.chat_log_url){
     try{
       const txt = await (await fetch(ill.chat_log_url)).text();
-      state.chatCache[key] = parseChatLog(txt, proj.slug, ill.label);
-    }catch(e){ state.chatCache[key] = []; }
+      const { items, initTs } = parseChatLog(txt, proj.slug, ill.label);
+      state.chatCache[key]  = items;
+      state.chatInitTs[key] = initTs || null;
+    }catch(e){ state.chatCache[key] = []; state.chatInitTs[key] = null; }
   }else{
     state.chatCache[key] = [];
+    state.chatInitTs[key] = null;
   }
 }
 
+function formatTs(ts){
+  if(!ts) return "";
+  const d = new Date(ts);
+  if (isNaN(d.getTime())) return ts; // 파싱 실패 시 원문
+  const pad = n => String(n).padStart(2,"0");
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 function parseChatLog(text, slug, label){
-  const lines = text.split(/\r?\n/).filter(Boolean);
-  const results = [];
+  const lines = text.split(/\r?\n/);
+  const items = [];
   let cur = null;
-  for(const line of lines){
-    if(line.includes("[USER]")){
+  let initTs = null;
+
+  const headerRE = /^\[([^\]]+)\]\s\[(USER|MODEL|INIT|SELECT|MODEL:TEXT)\]/;
+  const isHeader = (s) => headerRE.test(s || "");
+
+  for (let i = 0; i < lines.length; i++){
+    const line = lines[i];
+    if (!line) continue;
+
+    const h = line.match(headerRE);
+    const ts = h ? h[1] : null;
+    const kind = h ? h[2] : null;
+
+    if (kind === "INIT"){
+      // 최초 업로드 시각 저장 (여러 번 있을 수 있지만 첫 번째를 사용)
+      if (!initTs) initTs = ts || null;
+      continue;
+    }
+
+    if (kind === "USER"){
       const base = line.match(/base=([^\s]+)\s/);
-      const prompt = line.match(/prompt=(.*)$/);
+      let promptPart = "";
+      const idx = line.indexOf("prompt=");
+      if (idx >= 0) promptPart = line.slice(idx + "prompt=".length);
+
+      // 다음 헤더 전까지 멀티라인 프롬프트 이어붙이기
+      let j = i + 1;
+      while (j < lines.length && !isHeader(lines[j])) {
+        promptPart += (promptPart ? "\n" : "") + lines[j];
+        j++;
+      }
+      i = j - 1;
+
       cur = {
+        userTs: ts || null,
+        modelTs: null,
         baseUrl: base ? `/files${base[1]}` : "",
-        prompt: prompt ? prompt[1] : "",
+        prompt: (promptPart || "").trim(),
         outUrl: "",
         outFile: ""
       };
-    }else if(line.includes("[MODEL]") && line.includes("out=") && cur){
+      continue;
+    }
+
+    if (kind === "MODEL" && line.includes("out=") && cur){
       const out = line.match(/out=([^\s]+)\s*$/);
-      if(out){
-        cur.outUrl = `/files${out[1]}`;
+      if (out) {
+        cur.outUrl  = `/files${out[1]}`;
         cur.outFile = cur.outUrl.split("/").pop() || "";
-        results.push(cur);
+        cur.modelTs = ts || null;
+        items.push(cur);
         cur = null;
       }
+      continue;
     }
   }
-  return results;
+
+  return { items, initTs };
 }
+
+
 
 function deriveVersionLabelFromBase(baseUrl, label){
   if(!baseUrl) return `${label}-0`;
@@ -307,6 +358,7 @@ function currentIllustration(){
 function buildChatHTML(ill, slug){
   const key = `${state.current.slug}|${ill.label}`;
   const items = state.chatCache[key] || [];
+  const initTs = state.chatInitTs[key] || null;
   let html = "";
 
   // --- Original (A-0) ---
@@ -325,6 +377,7 @@ function buildChatHTML(ill, slug){
               <span class="action-pill" data-edit-base="__ORIGINAL__">이 버전 수정</span>
             </div>
           </div>
+          <div class="meta-stamp">${formatTs(initTs)}</div>
         </div>
       </div>
     `;
@@ -332,8 +385,8 @@ function buildChatHTML(ill, slug){
 
   // --- Generated sequences ---
   items.forEach(it=>{
-    const file = it.outFile;          // "A-3.png"
-    const name = file.replace(".png",""); // "A-3"
+    const file = it.outFile;
+    const name = file.replace(".png","");
     const isSel = (file===ill.selected);
     const usedBase = deriveVersionLabelFromBase(it.baseUrl, ill.label);
 
@@ -345,6 +398,7 @@ function buildChatHTML(ill, slug){
             <img class="base-thumb" src="${it.baseUrl}" alt="${usedBase}" data-chat-jump="${usedBase}"/>
             <div class="badge" style="position:absolute;top:8px;left:8px">${usedBase}</div>
           </div>
+          <div class="meta-stamp">${formatTs(it.userTs)}</div>
         </div>
       </div>
     `;
@@ -352,7 +406,10 @@ function buildChatHTML(ill, slug){
     // [USER] prompt
     html += `
       <div class="chat-msg user" id="msg-${name}-req">
-        <div class="bubble"><div style="white-space:pre-wrap">${escapeHtml(it.prompt||"")}</div></div>
+        <div class="bubble">
+          <div style="white-space:pre-wrap">${escapeHtml(it.prompt||"")}</div>
+          <div class="meta-stamp">${formatTs(it.userTs)}</div>
+        </div>
       </div>
     `;
 
@@ -369,6 +426,7 @@ function buildChatHTML(ill, slug){
               <span class="action-pill" data-edit-base="${file}">이 버전 수정</span>
             </div>
           </div>
+          <div class="meta-stamp">${formatTs(it.modelTs)}</div>
         </div>
       </div>
     `;
@@ -376,6 +434,7 @@ function buildChatHTML(ill, slug){
 
   return html || `<div class="chat-msg assistant"><div class="bubble">아직 생성된 이미지가 없습니다. 프롬프트를 입력해보세요.</div></div>`;
 }
+
 
 function paintChat(){
   const ill = currentIllustration(); if(!ill) return;
