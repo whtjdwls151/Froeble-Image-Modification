@@ -26,10 +26,16 @@ CORS(app)
 # ---------- 유틸 ----------
 SAFE_CHARS = "-_.() %s%s" % (string.ascii_letters, string.digits)
 def slugify(val: str) -> str:
-    val = unicodedata.normalize("NFKD", val).encode("ascii", "ignore").decode("ascii")
-    val = "".join(c for c in val if c in SAFE_CHARS).strip().lower()
-    val = re.sub(r"[-\s]+", "-", val)
-    return val or "project"
+    # 1) 파일 시스템 금지문자만 제거하고(윈도우 기준), 한글/숫자/영문은 살린다
+    s = (val or "").strip()
+    s = re.sub(r'[\\/:*?"<>|]+', '', s)   # 금지문자 제거
+    # 2) 공백 → 하이픈
+    s = re.sub(r'\s+', '-', s)
+    # 3) 너무 짧으면 타임스탬프 보강
+    if not s:
+        s = "project"
+    return s
+
 
 def now_iso():
     return datetime.datetime.now().isoformat(timespec="seconds")
