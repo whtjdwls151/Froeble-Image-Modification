@@ -486,9 +486,6 @@ def api_edit(slug):
         out_path = os.path.join(versions_dir, out_name)
         save_pil(out_img, out_path)
 
-        # 최종 선택 갱신
-        write_text(os.path.join(Ldir, "selected.txt"), out_name)
-
         # 로그 기록 (채팅 메시지처럼)
         # 사용자: 베이스/프롬프트
         base_rel = base_img_path.replace(DATA_DIR, "").replace("\\", "/")
@@ -508,8 +505,7 @@ def api_edit(slug):
         return jsonify({
             "ok": True,
             "version": out_name,
-            "image_url": f"/files{out_rel}",
-            "selected": True
+            "image_url": f"/files{out_rel}"
         })
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 400
